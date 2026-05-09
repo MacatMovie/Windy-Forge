@@ -1,52 +1,101 @@
 plugins {
-  id 'net.minecraftforge.gradle' version '6.0.24'
-  id 'eclipse'
-  id 'org.spongepowered.mixin' version '0.7.+'
+    id 'java-library'
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.neoforged.gradle.userdev' version '7.1.26'
 }
 
-group = 'com.macatmovie'
-version = '1.0.5'
+group = mod_group_id
+version = mod_version
 
-java { toolchain.languageVersion = JavaLanguageVersion.of(17) }
+base {
+    archivesName = mod_id
+}
 
-minecraft {
-  mappings channel: 'official', version: '1.20.1'
-  runs {
-    client {
-      workingDirectory project.file('run')
-      property 'forge.logging.console.level', 'info'
-      mods { jukebox_360 { source sourceSets.main } }
+// Minecraft 1.21.1 runs on Java 21.
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
+}
+
+runs {
+    configureEach {
+        workingDirectory project.layout.projectDirectory.dir('run').dir(name)
+        systemProperty 'forge.logging.markers', 'REGISTRIES'
+        systemProperty 'forge.logging.console.level', 'debug'
+        modSource project.sourceSets.main
     }
-  }
+
+    client {
+        systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+    }
+
+    server {
+        systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        argument '--nogui'
+    }
 }
 
-mixin {
-  add sourceSets.main, "jukebox_360.refmap.json"
-  config "jukebox_360.mixins.json"
-}
-
-repositories {
-  mavenCentral()
-  maven { url = 'https://repo.spongepowered.org/repository/maven-public' }
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
 }
 
 dependencies {
-  minecraft "net.minecraftforge:forge:1.20.1-47.4.4"
-  annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
+    implementation "net.neoforged:neoforge:${neo_version}"
 }
 
-tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+            minecraft_version: minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version: neo_version,
+            neo_version_range: neo_version_range,
+            loader_version_range: loader_version_range,
+            mod_id: mod_id,
+            mod_name: mod_name,
+            mod_version: mod_version,
+            mod_group_id: mod_group_id,
+            mod_authors: mod_authors,
+            mod_description: mod_description,
+            mod_license: mod_license
+    ]
+    inputs.properties replaceProperties
 
-jar {
-  from("LICENSE") { into("META-INF") }
+    filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties
+    }
+}
 
-  archiveFileName = "Jukebox_360-forge-1.20.1-v${version}.jar"
-  manifest {
-    attributes([
-      "Implementation-Title"   : "Jukebox 360°",
-      "Implementation-Version" : project.version,
-      "Implementation-Vendor"  : "macatmovie",
-      "MixinConfigs"           : "jukebox_360.mixins.json"
-    ])
-  }
+tasks.named('jar', Jar).configure {
+    archiveFileName = "Windy_NeoForge-${minecraft_version}-v${mod_version}.jar"
+    manifest {
+        attributes([
+                'Specification-Title'   : mod_id,
+                'Specification-Vendor'  : mod_authors,
+                'Specification-Version' : '1',
+                'Implementation-Title'  : project.name,
+                'Implementation-Version': mod_version,
+                'Implementation-Vendor' : mod_authors,
+                'MixinConfigs'          : 'windy.mixins.json'
+        ])
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
+        }
+    }
 }
